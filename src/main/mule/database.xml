@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="4a7ee8a0-5c4f-48e7-834f-51fac2ac1ddf" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="08646393-97da-4989-83ac-f9d83e3e39fc" >
+		<db:mssql-connection host="${sqldb.host}" port="${sqldb.port}" user="${sqldb.user}" password="${secure::sqldb.password}" databaseName="${sqldb.dbName}" />
+	</db:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="690ec3cc-db74-460a-9d16-ce709b811733" file="Properties\dev.yaml" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="2b38f67f-6dda-4a56-8c5d-c4ef71d2fc93" file="Properties\dev.yaml" key="mulesoft@1234567" />
+	<flow name="databaseFlow" doc:id="5eb0116a-4d0a-474b-92c4-35ffc9f1bac2" initialState="stopped">
+		<http:listener doc:name="Listener" doc:id="7d4c3e50-19b8-46da-be3f-a55ce6b2b485" config-ref="HTTP_Listener_config" path="/select"/>
+		<db:select doc:name="Select" doc:id="1d1bab9b-5fda-4847-8b45-080fa8bc2397" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from SalesLT.Customer where FirstName = 'Keith';]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="60b40d34-5e02-45e4-9b3a-3c856c5ee679" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="abd633ee-22e8-43b1-983d-74fbeccd2ea6" message="#[payload]" />
+	</flow>
+	<flow name="databaseFlow1" doc:id="37be525b-ffe7-4938-889f-ec160eabae0a" >
+		<http:listener doc:name="Listener" doc:id="e9bbe864-946c-4f9c-8555-6f706e0ce429" config-ref="HTTP_Listener_config" path="/insert"/>
+		<logger level="INFO" doc:name="Logger" doc:id="890a6799-8299-423f-bdde-885642c7c6aa" message="#[payload]" />
+		<db:insert doc:name="Insert" doc:id="363d4b75-60bc-43d1-a29f-d07fbd61f760" config-ref="Database_Config">
+			<db:sql ><![CDATA[Insert into [Production].[Categories] (category_name) values (:value)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+  value:attributes.queryParams.productName default "PG"
+}]]]></db:input-parameters>
+		</db:insert>
+		<ee:transform doc:name="Transform Message" doc:id="55290c8d-04a0-40cb-8719-2d08ec77a981" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="databaseFlow2" doc:id="5a3cd815-c878-420e-90e5-b9f84ce547b4" initialState="started">
+		<db:listener doc:name="On Table Row" doc:id="ae5bd8fd-9401-4ed7-b68b-67d5a1bd320e" config-ref="Database_Config" table="[production].[categories]" watermarkColumn="category_id">
+			<scheduling-strategy >
+				<fixed-frequency timeUnit="SECONDS" frequency="10"/>
+			</scheduling-strategy>
+		</db:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="9004a922-d31c-4449-8602-bcc898e830c1" message="#[payload]"/>
+	</flow>
+</mule>
